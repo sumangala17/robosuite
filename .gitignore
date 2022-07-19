@@ -1,3 +1,6 @@
+# Logs
+logs/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -112,6 +115,9 @@ mjkey.txt
 .idea
 
 .pytest_cache/
+<<<<<<< HEAD
 
 # private macros
 macros_private.py
+=======
+>>>>>>> add contact and pressure observation in lift env
