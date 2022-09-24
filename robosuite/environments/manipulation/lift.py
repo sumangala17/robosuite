@@ -129,9 +129,8 @@ class Lift(SingleArmEnv):
             [multiple / a single] segmentation(s) to use for all cameras. A list of list of str specifies per-camera
             segmentation setting(s) to use.
         
-        use_contact_obs (bool): if True, include a boolean grasping contact information in the observation.
+        use_touch_obs (bool): if True, include a grasping touch pressure information in the observation.
 
-        use_pressure_obs (bool): if True, include touch sensor pressure readings in the observation.
 
 
 
@@ -170,8 +169,7 @@ class Lift(SingleArmEnv):
         camera_segmentations=None,  # {None, instance, class, element}
         renderer="mujoco",
         renderer_config=None,
-        use_contact_obs=False,
-        use_pressure_obs=False,
+        use_touch_obs=False,
     ):
         # settings for table top
         self.table_full_size = table_full_size
@@ -188,10 +186,9 @@ class Lift(SingleArmEnv):
         # object placement initializer
         self.placement_initializer = placement_initializer
 
-        # whether to include contact and touch sensor pressure in observations
-        self.use_contact_obs = use_contact_obs
-        self.use_pressure_obs = use_pressure_obs
-        if self.use_pressure_obs:
+        # whether to include touch sensor pressure in observations
+        self.use_touch_obs = use_touch_obs
+        if self.use_touch_obs:
             assert robots == "Panda", "Touch sensor is only implemented on Panda gripper"
             gripper_types = "PandaTouchGripper"
 
@@ -367,22 +364,11 @@ class Lift(SingleArmEnv):
         sensors = []
         names = []
 
-        # Add binary contact observation
-        if self.use_contact_obs:
+        # Add touch sensor observation
+        if self.use_touch_obs:
 
-            @sensor(modality=f"{pf}proprio")
-            def gripper_contact(obs_cache):
-                return np.array([self._has_gripper_contact])
-
-            sensors.append(gripper_contact)
-            names.append(f"{pf}contact")
-
-        # Add touch sensor pressure observation
-        if self.use_pressure_obs:
-
-            @sensor(modality=f"{pf}proprio")
+            @sensor(modality=f"{pf}touch")
             def gripper_touch(obs_cache):
-
                 touch_pressure = [
                     self.robots[0].get_sensor_measurement('gripper0_touch1').item(),
                     self.robots[0].get_sensor_measurement('gripper0_touch2').item(),
@@ -418,7 +404,8 @@ class Lift(SingleArmEnv):
             sensors += [cube_pos, cube_quat, gripper_to_cube_pos]
             names += ["cube_pos", "cube_quat", "gripper_to_cube_pos"]
 
-            # Create observables
+        # Create observables
+        if len(names) > 0:
             for name, s in zip(names, sensors):
                 observables[name] = Observable(
                     name=name,
@@ -473,12 +460,12 @@ class Lift(SingleArmEnv):
         # cube is higher than the table top above a margin
         return cube_height > table_height + 0.04
 
-    @property
-    def _has_gripper_contact(self):
-        """
-        Determines whether the gripper is making contact with an object
+    # @property
+    # def _has_gripper_contact(self):
+    #     """
+    #     Determines whether the gripper is making contact with an object
 
-        Returns:
-            bool: True if there is contact between gripper fingers and cube object
-        """
-        return self._check_grasp(gripper=self.robots[0].gripper, object_geoms=self.cube)
+    #     Returns:
+    #         bool: True if there is contact between gripper fingers and cube object
+    #     """
+    #     return self._check_grasp(gripper=self.robots[0].gripper, object_geoms=self.cube)
