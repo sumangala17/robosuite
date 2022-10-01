@@ -131,7 +131,7 @@ class Lift(SingleArmEnv):
         
         use_touch_obs (bool): if True, include a grasping touch pressure information in the observation.
 
-
+        use_tactile_obs (bool): if True, include a tactile sensor observation from depth camera
 
 
     Raises:
@@ -170,6 +170,7 @@ class Lift(SingleArmEnv):
         renderer="mujoco",
         renderer_config=None,
         use_touch_obs=False,
+        use_tactile_obs=False,
     ):
         # settings for table top
         self.table_full_size = table_full_size
@@ -188,9 +189,14 @@ class Lift(SingleArmEnv):
 
         # whether to include touch sensor pressure in observations
         self.use_touch_obs = use_touch_obs
+        self.use_tactile_obs = use_tactile_obs
         if self.use_touch_obs:
             assert robots == "Panda", "Touch sensor is only implemented on Panda gripper"
             gripper_types = "PandaTouchGripper"
+
+        elif self.use_tactile_obs:
+            assert robots == "Panda", "Tactile sensor is only implemented on Panda gripper"
+            gripper_types = "PandaTactileGripper" 
 
         super().__init__(
             robots=robots,
@@ -377,6 +383,21 @@ class Lift(SingleArmEnv):
 
             sensors.append(gripper_touch)
             names.append(f"{pf}touch")
+
+        elif self.use_tactile_obs:
+
+            @sensor(modality=f"{pf}tactile_depth")
+            def gripper_tactile_depth(obs_cache):
+                left_img, left_depth = self.sim.render(width=84, height=84, camera_name="gripper0_tactile_camera_left", depth=True)
+                right_img, right_depth = self.sim.render(width=84, height=84, camera_name="gripper0_tactile_camera_right", depth=True)
+
+                tactile_depth = np.stack([left_depth, right_depth], axis=-1)
+
+                return tactile_depth
+
+            sensors.append(gripper_tactile_depth)
+            names.append(f"{pf}tactile_depth")
+
 
         # low-level object information
         if self.use_object_obs:
