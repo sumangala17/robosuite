@@ -401,8 +401,6 @@ class Lift(SingleArmEnv):
 
         # low-level object information
         if self.use_object_obs:
-            # Get robot prefix and define observables modality
-            pf = self.robots[0].robot_model.naming_prefix
             modality = "object"
 
             # cube-related observables

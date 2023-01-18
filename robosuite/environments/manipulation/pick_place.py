@@ -154,6 +154,10 @@ class PickPlace(SingleArmEnv):
             [multiple / a single] segmentation(s) to use for all cameras. A list of list of str specifies per-camera
             segmentation setting(s) to use.
 
+        use_touch_obs (bool): if True, include a grasping touch pressure information in the observation.
+
+        use_tactile_obs (bool): if True, include a tactile sensor observation from depth camera
+
     Raises:
         AssertionError: [Invalid object type specified]
         AssertionError: [Invalid number of robots specified]
@@ -193,6 +197,8 @@ class PickPlace(SingleArmEnv):
         camera_segmentations=None,  # {None, instance, class, element}
         renderer="mujoco",
         renderer_config=None,
+        use_touch_obs=False,
+        use_tactile_obs=False,
     ):
         # task settings
         self.single_object_mode = single_object_mode
@@ -220,6 +226,17 @@ class PickPlace(SingleArmEnv):
 
         # whether to use ground-truth object states
         self.use_object_obs = use_object_obs
+
+        # whether to include touch sensor pressure in observations
+        self.use_touch_obs = use_touch_obs
+        self.use_tactile_obs = use_tactile_obs
+        if self.use_touch_obs:
+            assert robots == "Panda", "Touch sensor is only implemented on Panda gripper"
+            gripper_types = "PandaTouchGripper"
+
+        elif self.use_tactile_obs:
+            assert robots == "Panda", "Tactile sensor is only implemented on Panda gripper"
+            gripper_types = "PandaTactileGripper" 
 
         super().__init__(
             robots=robots,
@@ -558,10 +575,48 @@ class PickPlace(SingleArmEnv):
         """
         observables = super()._setup_observables()
 
+        # Get prefix from robot model to avoid naming clashes for multiple robots
+        pf = self.robots[0].robot_model.naming_prefix
+
+        sensors = []
+        names = []
+        enableds = []
+        actives = []
+
+        # Add touch sensor observation
+        if self.use_touch_obs:
+
+            @sensor(modality=f"{pf}touch")
+            def gripper_touch(obs_cache):
+                touch_pressure = [
+                    self.robots[0].get_sensor_measurement('gripper0_touch1').item(),
+                    self.robots[0].get_sensor_measurement('gripper0_touch2').item(),
+                ]
+                return np.array(touch_pressure)
+
+            sensors.append(gripper_touch)
+            names.append(f"{pf}touch")
+            enableds.append(True)
+            actives.append(True)
+
+        elif self.use_tactile_obs:
+
+            @sensor(modality=f"{pf}tactile_depth")
+            def gripper_tactile_depth(obs_cache):
+                left_img, left_depth = self.sim.render(width=84, height=84, camera_name="gripper0_tactile_camera_left", depth=True)
+                right_img, right_depth = self.sim.render(width=84, height=84, camera_name="gripper0_tactile_camera_right", depth=True)
+
+                tactile_depth = np.stack([left_depth, right_depth], axis=-1)
+
+                return tactile_depth
+
+            sensors.append(gripper_tactile_depth)
+            names.append(f"{pf}tactile_depth")
+            enableds.append(True)
+            actives.append(True)
+
         # low-level object information
         if self.use_object_obs:
-            # Get robot prefix and define observables modality
-            pf = self.robots[0].robot_model.naming_prefix
             modality = "object"
 
             # Reset obj sensor mappings
@@ -576,10 +631,10 @@ class PickPlace(SingleArmEnv):
                     else np.eye(4)
                 )
 
-            sensors = [world_pose_in_gripper]
-            names = ["world_pose_in_gripper"]
-            enableds = [True]
-            actives = [False]
+            sensors.append(world_pose_in_gripper)
+            names.append("world_pose_in_gripper")
+            enableds.append(True)
+            actives.append(False)
 
             for i, obj in enumerate(self.objects):
                 # Create object sensors
