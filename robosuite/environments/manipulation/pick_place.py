@@ -642,8 +642,8 @@ class PickPlace(SingleArmEnv):
                 obj_sensors, obj_sensor_names = self._create_obj_sensors(obj_name=obj.name, modality=modality)
                 sensors += obj_sensors
                 names += obj_sensor_names
-                enableds += [using_obj] * 4
-                actives += [using_obj] * 4
+                enableds += [using_obj] * len(obj_sensors)
+                actives += [using_obj] * len(obj_sensors)
                 self.object_id_to_sensors[i] = obj_sensor_names
 
             if self.single_object_mode == 1:
@@ -712,8 +712,28 @@ class PickPlace(SingleArmEnv):
                 obs_cache[f"{obj_name}_to_{pf}eef_quat"] if f"{obj_name}_to_{pf}eef_quat" in obs_cache else np.zeros(4)
             )
 
-        sensors = [obj_pos, obj_quat, obj_to_eef_pos, obj_to_eef_quat]
-        names = [f"{obj_name}_pos", f"{obj_name}_quat", f"{obj_name}_to_{pf}eef_pos", f"{obj_name}_to_{pf}eef_quat"]
+        @sensor(modality=modality)
+        def bin_to_eef_pos(obs_cache):
+            # Immediately return default value if cache is empty
+            if any(
+                [name not in obs_cache for name in [f"{obj_name}_pos", f"{obj_name}_quat", "world_pose_in_gripper"]]
+            ):
+                return np.zeros(3)
+            bin_pos = self.target_bin_placements[self.object_id]
+            bin_quat = np.array([0, 0, 0, 1], dtype=np.float64)
+            bin_pose = T.pose2mat((bin_pos, bin_quat))
+            rel_pose = T.pose_in_A_to_pose_in_B(bin_pose, obs_cache["world_pose_in_gripper"])
+            rel_pos, rel_quat = T.mat2pose(rel_pose)
+            # obs_cache[f"target_to_{pf}eef_quat"] = rel_quat
+            return rel_pos
+
+
+        sensors = [obj_pos, obj_quat, obj_to_eef_pos, obj_to_eef_quat, bin_to_eef_pos]
+        names = [
+            f"{obj_name}_pos", f"{obj_name}_quat", 
+            f"{obj_name}_to_{pf}eef_pos", f"{obj_name}_to_{pf}eef_quat",
+            f"{obj_name}_bin_to_{pf}eef_pos"
+        ]
 
         return sensors, names
 
