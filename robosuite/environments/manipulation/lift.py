@@ -9,7 +9,7 @@ from robosuite.models.tasks import ManipulationTask
 from robosuite.utils.mjcf_utils import CustomMaterial
 from robosuite.utils.observables import Observable, sensor
 from robosuite.utils.placement_samplers import UniformRandomSampler
-from robosuite.utils.transform_utils import convert_quat
+import robosuite.utils.transform_utils as T
 
 
 class Lift(SingleArmEnv):
@@ -369,6 +369,8 @@ class Lift(SingleArmEnv):
 
         sensors = []
         names = []
+        enableds = []
+        actives = []
 
         # Add touch sensor observation
         if self.use_touch_obs:
@@ -383,6 +385,8 @@ class Lift(SingleArmEnv):
 
             sensors.append(gripper_touch)
             names.append(f"{pf}touch")
+            enableds.append(True)
+            actives.append(True)
 
         elif self.use_tactile_obs:
 
@@ -397,11 +401,26 @@ class Lift(SingleArmEnv):
 
             sensors.append(gripper_tactile_depth)
             names.append(f"{pf}tactile_depth")
-
+            enableds.append(True)
+            actives.append(True)
 
         # low-level object information
         if self.use_object_obs:
             modality = "object"
+
+            # for conversion to relative gripper frame
+            @sensor(modality=modality)
+            def world_pose_in_gripper(obs_cache):
+                return (
+                    T.pose_inv(T.pose2mat((obs_cache[f"{pf}eef_pos"], obs_cache[f"{pf}eef_quat"])))
+                    if f"{pf}eef_pos" in obs_cache and f"{pf}eef_quat" in obs_cache
+                    else np.eye(4)
+                )
+
+            sensors.append(world_pose_in_gripper)
+            names.append("world_pose_in_gripper")
+            enableds.append(True)
+            actives.append(False)
 
             # cube-related observables
             @sensor(modality=modality)
@@ -410,26 +429,57 @@ class Lift(SingleArmEnv):
 
             @sensor(modality=modality)
             def cube_quat(obs_cache):
-                return convert_quat(np.array(self.sim.data.body_xquat[self.cube_body_id]), to="xyzw")
+                return T.convert_quat(np.array(self.sim.data.body_xquat[self.cube_body_id]), to="xyzw")
+
+            # @sensor(modality=modality)
+            # def gripper_to_cube_pos(obs_cache):
+            #     return (
+            #         obs_cache[f"{pf}eef_pos"] - obs_cache["cube_pos"]
+            #         if f"{pf}eef_pos" in obs_cache and "cube_pos" in obs_cache
+            #         else np.zeros(3)
+            #     )
+
+            obj_name = 'cube'
+            @sensor(modality=modality)
+            def obj_to_eef_pos(obs_cache):
+                # Immediately return default value if cache is empty
+                if any(
+                    [name not in obs_cache for name in [f"{obj_name}_pos", f"{obj_name}_quat", "world_pose_in_gripper"]]
+                ):
+                    return np.zeros(3)
+                obj_pose = T.pose2mat((obs_cache[f"{obj_name}_pos"], obs_cache[f"{obj_name}_quat"]))
+                rel_pose = T.pose_in_A_to_pose_in_B(obj_pose, obs_cache["world_pose_in_gripper"])
+                rel_pos, rel_quat = T.mat2pose(rel_pose)
+                obs_cache[f"{obj_name}_to_{pf}eef_quat"] = rel_quat
+                return rel_pos  
 
             @sensor(modality=modality)
-            def gripper_to_cube_pos(obs_cache):
+            def obj_to_eef_quat(obs_cache):
                 return (
-                    obs_cache[f"{pf}eef_pos"] - obs_cache["cube_pos"]
-                    if f"{pf}eef_pos" in obs_cache and "cube_pos" in obs_cache
-                    else np.zeros(3)
+                    obs_cache[f"{obj_name}_to_{pf}eef_quat"] if f"{obj_name}_to_{pf}eef_quat" in obs_cache else np.zeros(4)
                 )
 
-            sensors += [cube_pos, cube_quat, gripper_to_cube_pos]
-            names += ["cube_pos", "cube_quat", "gripper_to_cube_pos"]
+            # sensors += [cube_pos, cube_quat, gripper_to_cube_pos]
+            # names += ["cube_pos", "cube_quat", "gripper_to_cube_pos"]
+            sensors += [cube_pos, cube_quat, obj_to_eef_pos, obj_to_eef_quat]
+            names += [
+                f"{obj_name}_pos", f"{obj_name}_quat", 
+                f"{obj_name}_to_{pf}eef_pos", 
+                f"{obj_name}_to_{pf}eef_quat",
+            ]
+            enableds += [True] * 4
+            actives += [True] * 4
+
 
         # Create observables
         if len(names) > 0:
-            for name, s in zip(names, sensors):
+            for name, s, enabled, active in zip(names, sensors, enableds, actives):
                 observables[name] = Observable(
                     name=name,
                     sensor=s,
                     sampling_rate=self.control_freq,
+                    enabled=enabled,
+                    active=active
                 )
 
         return observables
