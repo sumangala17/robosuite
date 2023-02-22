@@ -171,6 +171,7 @@ class Lift(SingleArmEnv):
         renderer_config=None,
         use_touch_obs=False,
         use_tactile_obs=False,
+        init_cube_pos=None,
     ):
         # settings for table top
         self.table_full_size = table_full_size
@@ -197,6 +198,8 @@ class Lift(SingleArmEnv):
         elif self.use_tactile_obs:
             assert robots == "Panda", "Tactile sensor is only implemented on Panda gripper"
             gripper_types = "PandaTactileGripper" 
+
+        self.init_cube_pos = init_cube_pos
 
         super().__init__(
             robots=robots,
@@ -320,6 +323,13 @@ class Lift(SingleArmEnv):
             material=redwood,
         )
 
+        if self.init_cube_pos is None:
+            x_range = [-0.03, 0.03]
+            y_range = [-0.03, 0.03]     
+        else:
+            x_range = [self.init_cube_pos[0], self.init_cube_pos[0]]
+            y_range = [self.init_cube_pos[1], self.init_cube_pos[1]]   
+
         # Create placement initializer
         if self.placement_initializer is not None:
             self.placement_initializer.reset()
@@ -328,8 +338,10 @@ class Lift(SingleArmEnv):
             self.placement_initializer = UniformRandomSampler(
                 name="ObjectSampler",
                 mujoco_objects=self.cube,
-                x_range=[-0.03, 0.03],
-                y_range=[-0.03, 0.03],
+                # x_range=[-0.03, 0.03],
+                # y_range=[-0.03, 0.03],
+                x_range=x_range,
+                y_range=y_range,
                 rotation=None,
                 ensure_object_boundary_in_range=False,
                 ensure_valid_placement=True,
@@ -377,11 +389,13 @@ class Lift(SingleArmEnv):
 
             @sensor(modality=f"{pf}touch")
             def gripper_touch(obs_cache):
-                touch_pressure = [
+                touch_pressure = np.array([
                     self.robots[0].get_sensor_measurement('gripper0_touch1').item(),
                     self.robots[0].get_sensor_measurement('gripper0_touch2').item(),
-                ]
-                return np.array(touch_pressure)
+                ])
+                touch_pressure /= 10 
+                touch_pressure[touch_pressure >= 1] = 1
+                return touch_pressure
 
             sensors.append(gripper_touch)
             names.append(f"{pf}touch")
