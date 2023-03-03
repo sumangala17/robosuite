@@ -426,8 +426,8 @@ class PickPlace(SingleArmEnv):
         self.placement_initializer = SequentialCompositeSampler(name="ObjectSampler")
 
         # can sample anywhere in bin
-        bin_x_half = self.model.mujoco_arena.table_full_size[0] / 2 - 0.05
-        bin_y_half = self.model.mujoco_arena.table_full_size[1] / 2 - 0.05
+        bin_x_half = self.model.mujoco_arena.table_full_size[0] / 2 - 0.1
+        bin_y_half = self.model.mujoco_arena.table_full_size[1] / 2 - 0.1
 
         # each object should just be sampled in the bounds of the bin (with some tolerance)
         self.placement_initializer.append_sampler(
@@ -588,10 +588,10 @@ class PickPlace(SingleArmEnv):
 
             @sensor(modality=f"{pf}touch")
             def gripper_touch(obs_cache):
-                touch_pressure = [
+                touch_pressure = np.array([
                     self.robots[0].get_sensor_measurement('gripper0_touch1').item(),
                     self.robots[0].get_sensor_measurement('gripper0_touch2').item(),
-                ]
+                ])
                 touch_pressure /= 10 
                 touch_pressure[touch_pressure >= 1] = 1
                 return touch_pressure
