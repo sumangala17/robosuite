@@ -592,7 +592,9 @@ class PickPlace(SingleArmEnv):
                     self.robots[0].get_sensor_measurement('gripper0_touch1').item(),
                     self.robots[0].get_sensor_measurement('gripper0_touch2').item(),
                 ]
-                return np.array(touch_pressure)
+                touch_pressure /= 10 
+                touch_pressure[touch_pressure >= 1] = 1
+                return touch_pressure
 
             sensors.append(gripper_touch)
             names.append(f"{pf}touch")
