@@ -706,6 +706,7 @@ class PickPlace(SingleArmEnv):
             rel_pose = T.pose_in_A_to_pose_in_B(obj_pose, obs_cache["world_pose_in_gripper"])
             rel_pos, rel_quat = T.mat2pose(rel_pose)
             obs_cache[f"{obj_name}_to_{pf}eef_quat"] = rel_quat
+            rel_pos = obs_cache[f"{pf}eef_pos"] - obs_cache[f"{obj_name}_pos"]
             return rel_pos
 
         @sensor(modality=modality)
@@ -729,12 +730,25 @@ class PickPlace(SingleArmEnv):
             # obs_cache[f"target_to_{pf}eef_quat"] = rel_quat
             return rel_pos
 
+        @sensor(modality=modality)
+        def obj_to_bin_pos(obs_cache):
+            # Immediately return default value if cache is empty
+            if any(
+                [name not in obs_cache for name in [f"{obj_name}_pos", f"{obj_name}_quat", "world_pose_in_gripper"]]
+            ):
+                return np.zeros(3)
+            rel_pos = self.target_bin_placements[self.object_id] - obs_cache[f"{obj_name}_pos"]
+            return rel_pos
 
-        sensors = [obj_pos, obj_quat, obj_to_eef_pos, obj_to_eef_quat, bin_to_eef_pos]
+        sensors = [
+            obj_pos, obj_quat, 
+            obj_to_eef_pos, obj_to_eef_quat, 
+            bin_to_eef_pos, obj_to_bin_pos
+        ]
         names = [
             f"{obj_name}_pos", f"{obj_name}_quat", 
             f"{obj_name}_to_{pf}eef_pos", f"{obj_name}_to_{pf}eef_quat",
-            f"{obj_name}_bin_to_{pf}eef_pos"
+            f"{obj_name}_bin_to_{pf}eef_pos", f"{obj_name}_to_{obj_name}_bin_pos",
         ]
 
         return sensors, names
