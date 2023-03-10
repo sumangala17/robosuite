@@ -1,6 +1,7 @@
 from collections import OrderedDict
 
 import numpy as np
+from scipy.spatial.transform import Rotation as R
 
 from robosuite.environments.manipulation.single_arm_env import SingleArmEnv
 from robosuite.models.arenas import TableArena
@@ -343,6 +344,7 @@ class Lift(SingleArmEnv):
                 x_range=x_range,
                 y_range=y_range,
                 rotation=None,
+                # rotation=np.pi/4,
                 ensure_object_boundary_in_range=False,
                 ensure_valid_placement=True,
                 reference_pos=self.table_offset,
@@ -465,6 +467,7 @@ class Lift(SingleArmEnv):
                 rel_pose = T.pose_in_A_to_pose_in_B(obj_pose, obs_cache["world_pose_in_gripper"])
                 rel_pos, rel_quat = T.mat2pose(rel_pose)
                 obs_cache[f"{obj_name}_to_{pf}eef_quat"] = rel_quat
+                rel_pos = obs_cache[f"{pf}eef_pos"] - obs_cache[f"{obj_name}_pos"]
                 return rel_pos  
 
             @sensor(modality=modality)
@@ -473,16 +476,36 @@ class Lift(SingleArmEnv):
                     obs_cache[f"{obj_name}_to_{pf}eef_quat"] if f"{obj_name}_to_{pf}eef_quat" in obs_cache else np.zeros(4)
                 )
 
+            @sensor(modality=modality)
+            def eef_to_obj_yaw(obs_cache):
+                """Computes the minimum yaw rotation to align with object"""
+                if f"{pf}eef_pos" not in obs_cache or "cube_pos" not in obs_cache:
+                    return 0
+
+                eef_quat = obs_cache[f'{pf}eef_quat']
+                obj_quat = obs_cache[f'{obj_name}_quat']
+                eef_az = R.from_quat(eef_quat).as_euler('zyx')[0]
+                obj_az = R.from_quat(obj_quat).as_euler('zyx')[0]
+
+                # Flip gripper yaw since it is pointing down
+                eef_az = self.normalize_angle(2 * np.pi - eef_az)
+
+                possible_az = self.normalize_angle(obj_az + np.pi * np.array([0, 0.5, 1, 1.5]))
+                diff_az = self.normalize_angle(np.array([az - eef_az for az in possible_az]))
+                i = np.argmin(np.abs(diff_az))
+                return possible_az[i] - eef_az
+
             # sensors += [cube_pos, cube_quat, gripper_to_cube_pos]
             # names += ["cube_pos", "cube_quat", "gripper_to_cube_pos"]
-            sensors += [cube_pos, cube_quat, obj_to_eef_pos, obj_to_eef_quat]
+            sensors += [cube_pos, cube_quat, obj_to_eef_pos, obj_to_eef_quat, eef_to_obj_yaw]
             names += [
                 f"{obj_name}_pos", f"{obj_name}_quat", 
                 f"{obj_name}_to_{pf}eef_pos", 
                 f"{obj_name}_to_{pf}eef_quat",
+                f"{pf}eef_to_{obj_name}_yaw"
             ]
-            enableds += [True] * 4
-            actives += [True] * 4
+            enableds += [True] * 5
+            actives += [True] * 5
 
 
         # Create observables
@@ -497,6 +520,10 @@ class Lift(SingleArmEnv):
                 )
 
         return observables
+
+    def normalize_angle(self, x):
+        # Normalize angle between -pi to pi
+        return np.arctan2(np.sin(x), np.cos(x))
 
     def _reset_internal(self):
         """
