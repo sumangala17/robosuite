@@ -341,12 +341,13 @@ class MujocoEnv(metaclass=EnvMeta):
         for obs_name, observable in self._observables.items():
             if observable.is_enabled() and observable.is_active():
                 obs = observable.obs
+                obs = np.array([obs,]) if type(obs) in {int, float} or not obs.shape else obs
                 observations[obs_name] = obs
                 modality = observable.modality + "-state"
                 if modality not in obs_by_modality:
                     obs_by_modality[modality] = []
                 # Make sure all observations are numpy arrays so we can concatenate them
-                array_obs = [obs] if type(obs) in {int, float} or not obs.shape else obs
+                array_obs = obs
                 obs_by_modality[modality].append(np.array(array_obs))
 
         # Add in modality observations

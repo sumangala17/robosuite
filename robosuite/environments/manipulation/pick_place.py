@@ -2,6 +2,7 @@ import random
 from collections import OrderedDict
 
 import numpy as np
+from scipy.spatial.transform import Rotation as R
 
 import robosuite.utils.transform_utils as T
 from robosuite.environments.manipulation.single_arm_env import SingleArmEnv
@@ -740,15 +741,45 @@ class PickPlace(SingleArmEnv):
             rel_pos = self.target_bin_placements[self.object_id] - obs_cache[f"{obj_name}_pos"]
             return rel_pos
 
+        @sensor(modality=modality)
+        def eef_to_obj_yaw(obs_cache):
+            """Computes the minimum yaw rotation to align with object"""
+            if f"{pf}eef_quat" not in obs_cache or f"{obj_name}_quat" not in obs_cache:
+                return np.array([0.,])
+
+            eef_quat = obs_cache[f'{pf}eef_quat']
+            obj_quat = obs_cache[f'{obj_name}_quat']
+            eef_az = R.from_quat(eef_quat).as_euler('zyx')[0]
+            obj_az = R.from_quat(obj_quat).as_euler('zyx')[0]
+
+            # Flip gripper yaw since it is pointing down
+            eef_az = self.normalize_angle(2 * np.pi - eef_az)
+
+            # For milk and bread, we can grasp on any of the four faces
+            # For cereal, we can only grasp across thin width
+            # For can, we can grasp in any direction
+            if obj_name in ["Milk", "Bread"]:
+                possible_az = self.normalize_angle(obj_az + np.pi * np.array([0, 0.5, 1, 1.5]))
+            elif obj_name == "Cereal":
+                possible_az = self.normalize_angle(obj_az + np.pi * np.array([0, 1]))
+            elif obj_name == "Can":
+                possible_az = [eef_az]
+
+            diff_az = self.normalize_angle(np.array([az - eef_az for az in possible_az]))
+            i = np.argmin(np.abs(diff_az))
+            return np.array([possible_az[i] - eef_az,])
+
         sensors = [
             obj_pos, obj_quat, 
             obj_to_eef_pos, obj_to_eef_quat, 
-            bin_to_eef_pos, obj_to_bin_pos
+            bin_to_eef_pos, obj_to_bin_pos,
+            eef_to_obj_yaw,
         ]
         names = [
             f"{obj_name}_pos", f"{obj_name}_quat", 
             f"{obj_name}_to_{pf}eef_pos", f"{obj_name}_to_{pf}eef_quat",
             f"{obj_name}_bin_to_{pf}eef_pos", f"{obj_name}_to_{obj_name}_bin_pos",
+            f"{pf}eef_to_{obj_name}_yaw"
         ]
 
         return sensors, names

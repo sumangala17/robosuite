@@ -318,3 +318,7 @@ class ManipulationEnv(RobotEnv):
             assert issubclass(
                 ROBOT_CLASS_MAPPING[robot], Manipulator
             ), "Only manipulator robots supported for manipulation environment!"
+
+    def normalize_angle(self, x):
+        # Normalize angle between -pi to pi
+        return np.arctan2(np.sin(x), np.cos(x))

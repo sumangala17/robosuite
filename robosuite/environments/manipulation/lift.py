@@ -479,8 +479,8 @@ class Lift(SingleArmEnv):
             @sensor(modality=modality)
             def eef_to_obj_yaw(obs_cache):
                 """Computes the minimum yaw rotation to align with object"""
-                if f"{pf}eef_pos" not in obs_cache or "cube_pos" not in obs_cache:
-                    return 0
+                if f"{pf}eef_quat" not in obs_cache or f"{obj_name}_quat" not in obs_cache:
+                    return np.array([0.,])
 
                 eef_quat = obs_cache[f'{pf}eef_quat']
                 obj_quat = obs_cache[f'{obj_name}_quat']
@@ -493,7 +493,7 @@ class Lift(SingleArmEnv):
                 possible_az = self.normalize_angle(obj_az + np.pi * np.array([0, 0.5, 1, 1.5]))
                 diff_az = self.normalize_angle(np.array([az - eef_az for az in possible_az]))
                 i = np.argmin(np.abs(diff_az))
-                return possible_az[i] - eef_az
+                return np.array([possible_az[i] - eef_az,])
 
             # sensors += [cube_pos, cube_quat, gripper_to_cube_pos]
             # names += ["cube_pos", "cube_quat", "gripper_to_cube_pos"]
@@ -520,10 +520,6 @@ class Lift(SingleArmEnv):
                 )
 
         return observables
-
-    def normalize_angle(self, x):
-        # Normalize angle between -pi to pi
-        return np.arctan2(np.sin(x), np.cos(x))
 
     def _reset_internal(self):
         """
