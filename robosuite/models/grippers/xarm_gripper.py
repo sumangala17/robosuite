@@ -23,16 +23,25 @@ class XArmGripperBase(GripperModel):
 
     @property
     def init_qpos(self):
-        # return np.array([0.020833, -0.020833])
-        return np.array([-0.026, -0.267, -0.200, -0.026, -0.267, -0.200])
+        return np.array([0, 0, 0., 0, 0., 0.])
 
     @property
     def _important_geoms(self):
         return {
-            "left_finger": ["finger1_collision", "finger1_pad_collision"],
-            "right_finger": ["finger2_collision", "finger2_pad_collision"],
-            "left_fingerpad": ["finger1_pad_collision"],
-            "right_fingerpad": ["finger2_pad_collision"],
+            "left_finger": [
+                "left_outer_finger_collision",
+                "left_inner_finger_collision",
+                "left_fingertip_collision",
+                "left_fingerpad_collision",
+            ],
+            "right_finger": [
+                "right_outer_finger_collision",
+                "right_inner_finger_collision",
+                "right_fingertip_collision",
+                "right_fingerpad_collision",
+            ],
+            "left_fingerpad": ["left_fingerpad_collision"],
+            "right_fingerpad": ["right_fingerpad_collision"],
         }
 
 
@@ -56,13 +65,13 @@ class XArmGripper(XArmGripperBase):
         """
         assert len(action) == 1
         self.current_action = np.clip(
-            self.current_action + np.array([1.0, -1.0]) * self.speed * np.sign(action), -1.0, 1.0
+            self.current_action + self.speed * np.sign(action), -1.0, 1.0
         )
         return self.current_action
 
     @property
     def speed(self):
-        return 0.01
+        return 0.005
 
     @property
     def dof(self):

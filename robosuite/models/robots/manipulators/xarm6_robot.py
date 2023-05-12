@@ -24,8 +24,9 @@ class xArm6(ManipulatorModel):
 
     @property
     def default_gripper(self):
-        return "XArmGripper"
-        # return "Robotiq85Gripper"
+        # return None
+        # return "XArmGripper"
+        return "Robotiq85Gripper"
 
     @property
     def default_controller_config(self):
@@ -33,7 +34,7 @@ class xArm6(ManipulatorModel):
 
     @property
     def init_qpos(self):
-        return np.array([0.0, 0.0, 0, 0.0, 0.0, 0.0])
+        return np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 
 
     @property
