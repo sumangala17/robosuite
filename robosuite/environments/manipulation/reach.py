@@ -5,6 +5,7 @@ from scipy.spatial.transform import Rotation as R
 
 from robosuite.environments.manipulation.single_arm_env import SingleArmEnv
 from robosuite.models.arenas import TableArena
+from robosuite.models.objects import BallObject
 from robosuite.models.tasks import ManipulationTask
 from robosuite.utils.mjcf_utils import CustomMaterial
 from robosuite.utils.observables import Observable, sensor
@@ -270,10 +271,20 @@ class Reach(SingleArmEnv):
         if self.target_pos is None:
             self.target_pos = np.random.uniform(low=[-0.1, -0.1, 0.9], high=[0.1, 0.1, 1.1])
 
+        self.target = BallObject(
+            name="target",
+            size=[0.01],
+            rgba=[0, 1, 0, 1],
+            obj_type='visual',
+            joints=None
+        )
+        self.target.get_obj().set("pos", " ".join([str(num) for num in self.target_pos]))
+
         # task includes arena, robot, and objects of interest
         self.model = ManipulationTask(
             mujoco_arena=mujoco_arena,
             mujoco_robots=[robot.robot_model for robot in self.robots],
+            mujoco_objects=self.target,
         )
 
     def _setup_references(self):
