@@ -241,7 +241,8 @@ class Reach(SingleArmEnv):
 
             # reaching reward
             gripper_site_pos = self.sim.data.site_xpos[self.robots[0].eef_site_id]
-            dist = np.linalg.norm(gripper_site_pos - self.target_pos)
+            target_pos = self.sim.data.body_xpos[self.target_body_id]
+            dist = np.linalg.norm(gripper_site_pos - target_pos)
             reaching_reward = 1 - np.tanh(10.0 * dist)
             reward = reaching_reward
 
@@ -269,7 +270,7 @@ class Reach(SingleArmEnv):
 
         # Set target location without physical objects
         if self.target_pos is None:
-            self.target_pos = np.random.uniform(low=[-0.1, -0.1, 0.9], high=[0.1, 0.1, 1.1])
+            target_pos = np.random.uniform(low=[-0.1, -0.1, 0.9], high=[0.1, 0.1, 1.1])
 
         self.target = BallObject(
             name="target",
@@ -278,7 +279,30 @@ class Reach(SingleArmEnv):
             obj_type='visual',
             joints=None
         )
-        self.target.get_obj().set("pos", " ".join([str(num) for num in self.target_pos]))
+        self.target.get_obj().set("pos", " ".join([str(num) for num in target_pos]))
+
+        # if self.target_pos is None:
+        #     x_range = [-0.1, 0.1]
+        #     y_range = [-0.1, 0.1]
+        #     z_range = [0.9, 1.1]
+        # else:   
+        #     x, y, z = self.target_pos
+        #     x_range = [x, x]
+        #     y_range = [y, y]
+        #     z_range = [z, z]
+        # self.placement_initializer = UniformRandomSampler(
+        #     name="ObjectSampler",
+        #     mujoco_objects=self.target,
+        #     x_range=x_range,
+        #     y_range=y_range,
+        #     z_range=z_range,
+        #     rotation=None,
+        #     # rotation=np.pi/4,
+        #     ensure_object_boundary_in_range=False,
+        #     ensure_valid_placement=True,
+        #     reference_pos=self.table_offset,
+        #     z_offset=0.01,
+        # )
 
         # task includes arena, robot, and objects of interest
         self.model = ManipulationTask(
@@ -294,6 +318,9 @@ class Reach(SingleArmEnv):
         in a flatten array, which is how MuJoCo stores physical simulation data.
         """
         super()._setup_references()
+
+        # Additional object references from this env
+        self.target_body_id = self.sim.model.body_name2id(self.target.root_body)
 
 
     def _setup_observables(self):
@@ -334,11 +361,11 @@ class Reach(SingleArmEnv):
             # target-related observables
             @sensor(modality=modality)
             def target_pos(obs_cache):
-                return self.target_pos
+                return np.array(self.sim.data.body_xpos[self.target_body_id])
 
             @sensor(modality=modality)
             def target_quat(obs_cache):
-                return np.array([0, 0, 0, 1])
+                return np.array([1, 0, 0, 0])
 
             @sensor(modality=modality)
             def target_to_eef_pos(obs_cache):
@@ -390,6 +417,11 @@ class Reach(SingleArmEnv):
         """
         super()._reset_internal()
 
+        if self.target_pos is None:
+            target_pos = np.random.uniform(low=[-0.1, -0.1, 0.9], high=[0.1, 0.1, 1.1])
+
+        self.target.get_obj().set("pos", " ".join([str(num) for num in target_pos]))
+
     def visualize(self, vis_settings):
         """
         In addition to super call, visualize gripper site proportional to the distance to the cube.
@@ -410,15 +442,7 @@ class Reach(SingleArmEnv):
             bool: True if target has been reached
         """
         gripper_site_pos = self.sim.data.site_xpos[self.robots[0].eef_site_id]
+        target_pos = self.sim.data.body_xpos[self.target_body_id]
 
         # cube is higher than the table top above a margin
-        return np.linalg.norm(gripper_site_pos - self.target_pos) < 0.05
-
-    def reset(self, target_pos=None):
-
-        obs = super().reset()
-
-        if target_pos is not None:
-            self.target_pos = target_pos
-
-        return obs
+        return np.linalg.norm(gripper_site_pos - target_pos) < 0.03
