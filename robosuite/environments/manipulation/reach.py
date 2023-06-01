@@ -271,6 +271,8 @@ class Reach(SingleArmEnv):
         # Set target location without physical objects
         if self.target_pos is None:
             target_pos = np.random.uniform(low=[-0.1, -0.1, 0.9], high=[0.1, 0.1, 1.1])
+        else:
+            target_pos = self.target_pos
 
         self.target = BallObject(
             name="target",
@@ -280,30 +282,7 @@ class Reach(SingleArmEnv):
             joints=None
         )
         self.target.get_obj().set("pos", " ".join([str(num) for num in target_pos]))
-
-        # if self.target_pos is None:
-        #     x_range = [-0.1, 0.1]
-        #     y_range = [-0.1, 0.1]
-        #     z_range = [0.9, 1.1]
-        # else:   
-        #     x, y, z = self.target_pos
-        #     x_range = [x, x]
-        #     y_range = [y, y]
-        #     z_range = [z, z]
-        # self.placement_initializer = UniformRandomSampler(
-        #     name="ObjectSampler",
-        #     mujoco_objects=self.target,
-        #     x_range=x_range,
-        #     y_range=y_range,
-        #     z_range=z_range,
-        #     rotation=None,
-        #     # rotation=np.pi/4,
-        #     ensure_object_boundary_in_range=False,
-        #     ensure_valid_placement=True,
-        #     reference_pos=self.table_offset,
-        #     z_offset=0.01,
-        # )
-
+        
         # task includes arena, robot, and objects of interest
         self.model = ManipulationTask(
             mujoco_arena=mujoco_arena,
@@ -419,6 +398,8 @@ class Reach(SingleArmEnv):
 
         if self.target_pos is None:
             target_pos = np.random.uniform(low=[-0.1, -0.1, 0.9], high=[0.1, 0.1, 1.1])
+        else:
+            target_pos = self.target_pos
 
         self.target.get_obj().set("pos", " ".join([str(num) for num in target_pos]))
 
