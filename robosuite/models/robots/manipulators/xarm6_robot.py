@@ -15,8 +15,12 @@ class xArm6(ManipulatorModel):
     def __init__(self, idn=0):
         super().__init__(xml_path_completion("robots/xarm6/robot.xml"), idn=idn)
 
-        # # Set joint damping
-        # self.set_joint_attribute(attrib="damping", values=np.array((0.1, 0.1, 0.1, 0.1, 0.1, 0.01, 0.01)))
+        # Set joint damping
+        self.set_joint_attribute(attrib="damping", 
+            values=np.array((0.1, 0.1, 0.1, 0.1, 0.01, 0.01)))
+
+        self.set_joint_attribute(attrib="frictionloss", 
+            values=np.array((0.1, 0.1, 0.1, 0.1, 0.1, 0.1)))
 
     @property
     def default_mount(self):
@@ -24,9 +28,9 @@ class xArm6(ManipulatorModel):
 
     @property
     def default_gripper(self):
-        # return None
+        return None
         # return "XArmGripper"
-        return "Robotiq85Gripper"
+        # return "Robotiq85Gripper"
 
     @property
     def default_controller_config(self):
