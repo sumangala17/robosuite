@@ -192,15 +192,18 @@ class Lift(SingleArmEnv):
         # whether to include touch sensor pressure in observations
         self.use_touch_obs = use_touch_obs
         self.use_tactile_obs = use_tactile_obs
+
         if self.use_touch_obs:
-            assert robots == "Panda", "Touch sensor is only implemented on Panda gripper"
-            gripper_types = "PandaTouchGripper"
+            assert gripper_types in ['PandaTouchGripper', 'Robotiq85TouchGripper'], (
+                "Must specify gripper_types in ['PandaTouchGripper', 'Robotiq85TouchGripper']")
 
         elif self.use_tactile_obs:
             assert robots == "Panda", "Tactile sensor is only implemented on Panda gripper"
             gripper_types = "PandaTactileGripper" 
 
         self.init_cube_pos = init_cube_pos
+
+        self.target_pos = np.array([0., 0., 0.95])
 
         super().__init__(
             robots=robots,
@@ -273,6 +276,11 @@ class Lift(SingleArmEnv):
             # grasping reward
             if self._check_grasp(gripper=self.robots[0].gripper, object_geoms=self.cube):
                 reward += 0.25
+            
+            # move cube to target reward
+            dist = np.linalg.norm(self.target_pos - cube_pos)
+            reach_target_reward = 1 - np.tanh(10.0 * dist)
+            reward += reach_target_reward
 
         # Scale reward if requested
         if self.reward_scale is not None:
@@ -369,6 +377,15 @@ class Lift(SingleArmEnv):
         # Additional object references from this env
         self.cube_body_id = self.sim.model.body_name2id(self.cube.root_body)
 
+        if self.robots[0].gripper.name.startswith("Robotiq85"):
+            self.fingerpad_id1 = self.sim.model.geom_name2id('gripper0_left_fingerpad_collision')
+            self.fingerpad_id2 = self.sim.model.geom_name2id('gripper0_right_fingerpad_collision')
+            self.fingerpad_offset = 0.02
+        elif self.robots[0].gripper.name.startswith("Panda"):
+            self.fingerpad_id1 = self.sim.model.geom_name2id('gripper0_finger1_pad_collision')
+            self.fingerpad_id2 = self.sim.model.geom_name2id('gripper0_finger2_pad_collision')
+            self.fingerpad_offset = 0.007
+
     def _setup_observables(self):
         """
         Sets up observables to be used for this environment. Creates object-based observables if enabled
@@ -410,13 +427,27 @@ class Lift(SingleArmEnv):
             def gripper_tactile_depth(obs_cache):
                 left_img, left_depth = self.sim.render(width=84, height=84, camera_name="gripper0_tactile_camera_left", depth=True)
                 right_img, right_depth = self.sim.render(width=84, height=84, camera_name="gripper0_tactile_camera_right", depth=True)
-
                 tactile_depth = np.stack([left_depth, right_depth], axis=-1)
 
                 return tactile_depth
 
             sensors.append(gripper_tactile_depth)
             names.append(f"{pf}tactile_depth")
+            enableds.append(True)
+            actives.append(True)
+
+        # Add gripper width observation
+        gripper_name = self.robots[0].gripper.name
+        if gripper_name.startswith("Panda") or gripper_name.startswith("Robotiq85"):
+
+            @sensor(modality=f"{pf}gripper_width")
+            def gripper_width(obs_cache):
+                width = np.linalg.norm(self.sim.data.geom_xpos[self.fingerpad_id1] 
+                    - self.sim.data.geom_xpos[self.fingerpad_id2]) - self.fingerpad_offset
+                return width
+
+            sensors.append(gripper_width)
+            names.append(f"{pf}gripper_width")
             enableds.append(True)
             actives.append(True)
 
@@ -446,14 +477,6 @@ class Lift(SingleArmEnv):
             @sensor(modality=modality)
             def cube_quat(obs_cache):
                 return T.convert_quat(np.array(self.sim.data.body_xquat[self.cube_body_id]), to="xyzw")
-
-            # @sensor(modality=modality)
-            # def gripper_to_cube_pos(obs_cache):
-            #     return (
-            #         obs_cache[f"{pf}eef_pos"] - obs_cache["cube_pos"]
-            #         if f"{pf}eef_pos" in obs_cache and "cube_pos" in obs_cache
-            #         else np.zeros(3)
-            #     )
 
             obj_name = 'cube'
             @sensor(modality=modality)
@@ -494,18 +517,27 @@ class Lift(SingleArmEnv):
                 diff_az = self.normalize_angle(np.array([az - eef_az for az in possible_az]))
                 i = np.argmin(np.abs(diff_az))
                 return np.array([possible_az[i] - eef_az,])
+            
+            @sensor(modality=modality)
+            def obj_to_target_pos(obs_cache):
+                if 'cube_pos' not in obs_cache:
+                    return np.zeros(3)
+                else:
+                    return self.target_pos - obs_cache['cube_pos']
 
-            # sensors += [cube_pos, cube_quat, gripper_to_cube_pos]
-            # names += ["cube_pos", "cube_quat", "gripper_to_cube_pos"]
-            sensors += [cube_pos, cube_quat, obj_to_eef_pos, obj_to_eef_quat, eef_to_obj_yaw]
-            names += [
+            obj_sensors = [cube_pos, cube_quat, obj_to_eef_pos, obj_to_eef_quat, 
+                eef_to_obj_yaw, obj_to_target_pos]
+            obj_sensor_names = [
                 f"{obj_name}_pos", f"{obj_name}_quat", 
                 f"{obj_name}_to_{pf}eef_pos", 
                 f"{obj_name}_to_{pf}eef_quat",
-                f"{pf}eef_to_{obj_name}_yaw"
+                f"{pf}eef_to_{obj_name}_yaw",
+                f"{obj_name}_to_target_pos",
             ]
-            enableds += [True] * 5
-            actives += [True] * 5
+            sensors.extend(obj_sensors)
+            names.extend(obj_sensor_names) 
+            enableds += [True] * len(obj_sensors)
+            actives += [True] * len(obj_sensor_names)
 
 
         # Create observables
@@ -560,11 +592,15 @@ class Lift(SingleArmEnv):
         Returns:
             bool: True if cube has been lifted
         """
-        cube_height = self.sim.data.body_xpos[self.cube_body_id][2]
-        table_height = self.model.mujoco_arena.table_offset[2]
+        # cube_height = self.sim.data.body_xpos[self.cube_body_id][2]
+        # table_height = self.model.mujoco_arena.table_offset[2]
 
-        # cube is higher than the table top above a margin
-        return cube_height > table_height + 0.04
+        # # cube is higher than the table top above a margin
+        # return cube_height > table_height + 0.04
+
+        cube_pos = self.sim.data.body_xpos[self.cube_body_id]
+        dist = np.linalg.norm(self.target_pos - cube_pos)
+        return dist < 0.02
 
     # @property
     # def _has_gripper_contact(self):

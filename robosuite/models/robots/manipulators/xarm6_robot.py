@@ -28,9 +28,9 @@ class xArm6(ManipulatorModel):
 
     @property
     def default_gripper(self):
-        return None
+        # return None
         # return "XArmGripper"
-        # return "Robotiq85Gripper"
+        return "Robotiq85Gripper"
 
     @property
     def default_controller_config(self):

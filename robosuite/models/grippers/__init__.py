@@ -4,7 +4,7 @@ from .gripper_tester import GripperTester
 
 from .panda_gripper import PandaGripper, PandaTouchGripper, PandaTactileGripper
 from .rethink_gripper import RethinkGripper
-from .robotiq_85_gripper import Robotiq85Gripper
+from .robotiq_85_gripper import Robotiq85Gripper, Robotiq85TouchGripper
 from .robotiq_three_finger_gripper import RobotiqThreeFingerGripper, RobotiqThreeFingerDexterousGripper
 from .panda_gripper import PandaGripper
 from .jaco_three_finger_gripper import JacoThreeFingerGripper, JacoThreeFingerDexterousGripper
@@ -23,6 +23,7 @@ GRIPPER_MAPPING = {
     "JacoThreeFingerDexterousGripper": JacoThreeFingerDexterousGripper,
     "WipingGripper": WipingGripper,
     "Robotiq85Gripper": Robotiq85Gripper,
+    "Robotiq85TouchGripper": Robotiq85TouchGripper,
     "Robotiq140Gripper": Robotiq140Gripper,
     "RobotiqThreeFingerGripper": RobotiqThreeFingerGripper,
     "RobotiqThreeFingerDexterousGripper": RobotiqThreeFingerDexterousGripper,
