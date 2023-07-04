@@ -5,7 +5,7 @@ from scipy.spatial.transform import Rotation as R
 
 from robosuite.environments.manipulation.single_arm_env import SingleArmEnv
 from robosuite.models.arenas import TableArena
-from robosuite.models.objects import BoxObject
+from robosuite.models.objects import BoxObject, BallObject
 from robosuite.models.tasks import ManipulationTask
 from robosuite.utils.mjcf_utils import CustomMaterial
 from robosuite.utils.observables import Observable, sensor
@@ -347,23 +347,29 @@ class Lift(SingleArmEnv):
             self.placement_initializer = UniformRandomSampler(
                 name="ObjectSampler",
                 mujoco_objects=self.cube,
-                # x_range=[-0.03, 0.03],
-                # y_range=[-0.03, 0.03],
                 x_range=x_range,
                 y_range=y_range,
                 rotation=None,
-                # rotation=np.pi/4,
                 ensure_object_boundary_in_range=False,
                 ensure_valid_placement=True,
                 reference_pos=self.table_offset,
                 z_offset=0.01,
             )
 
+        self.target = BallObject(
+            name="target",
+            size=[0.01],
+            rgba=[0, 1, 0, 1],
+            obj_type='visual',
+            joints=None
+        )
+        self.target.get_obj().set("pos", " ".join([str(num) for num in self.target_pos]))
+
         # task includes arena, robot, and objects of interest
         self.model = ManipulationTask(
             mujoco_arena=mujoco_arena,
             mujoco_robots=[robot.robot_model for robot in self.robots],
-            mujoco_objects=self.cube,
+            mujoco_objects=[self.cube, self.target],
         )
 
     def _setup_references(self):
