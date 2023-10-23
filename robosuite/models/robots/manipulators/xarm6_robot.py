@@ -46,7 +46,8 @@ class xArm6(ManipulatorModel):
         return {
             "bins": (-0.5, -0.1, 0),
             "empty": (-0.6, 0, 0),
-            "table": lambda table_length: (-0.16 - table_length / 2, 0, 0),
+            # "table": lambda table_length: (-0.16 - table_length / 2, 0, 0),
+            "table": lambda table_length: (-0.407, 0, 0.171)
         }
 
     @property
