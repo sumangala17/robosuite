@@ -44,10 +44,12 @@ class xArm6(ManipulatorModel):
     @property
     def base_xpos_offset(self):
         return {
-            "bins": (-0.5, -0.1, 0),
+            # "bins": (-0.5, -0.1, 0),
+            "bins": (-0.407, 0.0, 0.171),    # PickPlace
             "empty": (-0.6, 0, 0),
             # "table": lambda table_length: (-0.16 - table_length / 2, 0, 0),
-            "table": lambda table_length: (-0.407, 0, 0.171)
+            "table": lambda table_length: (-0.407, 0, 0.171)      # Reach/Lift
+            # "table": lambda table_length: (-0.437, 0, 0.171)
         }
 
     @property

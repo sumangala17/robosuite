@@ -232,8 +232,8 @@ class PickPlace(SingleArmEnv):
         self.use_touch_obs = use_touch_obs
         self.use_tactile_obs = use_tactile_obs
         if self.use_touch_obs:
-            assert robots == "Panda", "Touch sensor is only implemented on Panda gripper"
-            gripper_types = "PandaTouchGripper"
+            assert gripper_types in ['PandaTouchGripper', 'Robotiq85TouchGripper'], (
+                "Must specify gripper_types in ['PandaTouchGripper', 'Robotiq85TouchGripper']")
 
         elif self.use_tactile_obs:
             assert robots == "Panda", "Tactile sensor is only implemented on Panda gripper"
@@ -435,9 +435,12 @@ class PickPlace(SingleArmEnv):
             sampler=UniformRandomSampler(
                 name="CollisionObjectSampler",
                 mujoco_objects=self.objects,
+                # x_range=[-bin_x_half, bin_x_half],
+                # y_range=[-bin_y_half, bin_y_half],
+                # rotation=None,
                 x_range=[-bin_x_half, bin_x_half],
-                y_range=[-bin_y_half, bin_y_half],
-                rotation=None,
+                y_range=[-0.03, bin_y_half+0.03],
+                rotation=0,
                 rotation_axis="z",
                 ensure_object_boundary_in_range=True,
                 ensure_valid_placement=True,
@@ -567,6 +570,15 @@ class PickPlace(SingleArmEnv):
             bin_y_low += self.bin_size[1] / 4.0
             self.target_bin_placements[i, :] = [bin_x_low, bin_y_low, self.bin2_pos[2]]
 
+        if self.robots[0].gripper.name.startswith("Robotiq85"):
+            self.fingerpad_id1 = self.sim.model.geom_name2id('gripper0_left_fingerpad_collision')
+            self.fingerpad_id2 = self.sim.model.geom_name2id('gripper0_right_fingerpad_collision')
+            self.fingerpad_offset = 0.02
+        elif self.robots[0].gripper.name.startswith("Panda"):
+            self.fingerpad_id1 = self.sim.model.geom_name2id('gripper0_finger1_pad_collision')
+            self.fingerpad_id2 = self.sim.model.geom_name2id('gripper0_finger2_pad_collision')
+            self.fingerpad_offset = 0.007
+
     def _setup_observables(self):
         """
         Sets up observables to be used for this environment. Creates object-based observables if enabled
@@ -615,6 +627,21 @@ class PickPlace(SingleArmEnv):
 
             sensors.append(gripper_tactile_depth)
             names.append(f"{pf}tactile_depth")
+            enableds.append(True)
+            actives.append(True)
+
+        # Add gripper width observation
+        gripper_name = self.robots[0].gripper.name
+        if gripper_name.startswith("Panda") or gripper_name.startswith("Robotiq85"):
+
+            @sensor(modality=f"{pf}gripper_width")
+            def gripper_width(obs_cache):
+                width = np.linalg.norm(self.sim.data.geom_xpos[self.fingerpad_id1] 
+                    - self.sim.data.geom_xpos[self.fingerpad_id2]) - self.fingerpad_offset
+                return width
+
+            sensors.append(gripper_width)
+            names.append(f"{pf}gripper_width")
             enableds.append(True)
             actives.append(True)
 

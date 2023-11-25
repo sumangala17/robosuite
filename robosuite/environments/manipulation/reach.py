@@ -175,7 +175,7 @@ class Reach(SingleArmEnv):
         # settings for table top
         self.table_full_size = table_full_size
         self.table_friction = table_friction
-        self.table_offset = np.array((0, 0, 0.8))
+        self.table_offset = np.array((0, 0, 0.7))
 
         # reward configuration
         self.reward_scale = reward_scale
@@ -185,6 +185,9 @@ class Reach(SingleArmEnv):
         self.use_object_obs = use_object_obs
 
         self.target_pos = target_pos
+        if self.target_pos is None:
+            self.target_pos_min = [-0.05, -0.25, 0.8]
+            self.target_pos_max = [0.15, 0.25, 1.2]
 
         super().__init__(
             robots=robots,
@@ -270,7 +273,7 @@ class Reach(SingleArmEnv):
 
         # Set target location without physical objects
         if self.target_pos is None:
-            target_pos = np.random.uniform(low=[-0.1, -0.1, 0.9], high=[0.1, 0.1, 1.1])
+            target_pos = np.random.uniform(low=self.target_pos_min, high=self.target_pos_max)
         else:
             target_pos = self.target_pos
 
@@ -396,12 +399,6 @@ class Reach(SingleArmEnv):
         """
         super()._reset_internal()
 
-        if self.target_pos is None:
-            target_pos = np.random.uniform(low=[-0.1, -0.1, 0.9], high=[0.1, 0.1, 1.1])
-        else:
-            target_pos = self.target_pos
-
-        self.target.get_obj().set("pos", " ".join([str(num) for num in target_pos]))
 
     def visualize(self, vis_settings):
         """
@@ -427,3 +424,15 @@ class Reach(SingleArmEnv):
 
         # cube is higher than the table top above a margin
         return np.linalg.norm(gripper_site_pos - target_pos) < 0.03
+
+    def reset_target(self):
+
+        task_state = np.array(self.sim.get_state().flatten())   # time, qpos, qvel
+
+        self.reset()
+        self.sim.reset()
+        self.sim.set_state_from_flattened(task_state)
+        self.sim.forward()
+
+        obs = self._get_observations(force_update=True)
+        return obs

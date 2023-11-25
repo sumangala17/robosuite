@@ -328,8 +328,10 @@ class Lift(SingleArmEnv):
         )
         self.cube = BoxObject(
             name="cube",
-            size_min=[0.025, 0.025, 0.025],  # [0.015, 0.015, 0.015],
-            size_max=[0.025, 0.025, 0.025],  # [0.018, 0.018, 0.018])
+            # size_min=[0.025, 0.025, 0.025],  # [0.015, 0.015, 0.015],
+            # size_max=[0.025, 0.025, 0.025],  # [0.018, 0.018, 0.018])
+            size_min=[0.02, 0.02, 0.02],  # [0.015, 0.015, 0.015],
+            size_max=[0.02, 0.02, 0.02],  # [0.018, 0.018, 0.018])
             rgba=[1, 0, 0, 1],
             material=redwood,
         )
@@ -352,6 +354,7 @@ class Lift(SingleArmEnv):
                 x_range=x_range,
                 y_range=y_range,
                 rotation=0,
+                # rotation=None,
                 ensure_object_boundary_in_range=False,
                 ensure_valid_placement=True,
                 reference_pos=self.table_offset,
