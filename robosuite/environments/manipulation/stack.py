@@ -1,6 +1,7 @@
 from collections import OrderedDict
 
 import numpy as np
+from scipy.spatial.transform import Rotation as R
 
 from robosuite.environments.manipulation.single_arm_env import SingleArmEnv
 from robosuite.models.arenas import TableArena
@@ -142,6 +143,7 @@ class Stack(SingleArmEnv):
         initialization_noise="default",
         table_full_size=(0.8, 0.8, 0.05),
         table_friction=(1.0, 5e-3, 1e-4),
+        table_offset=(0, 0, 0.8),
         use_camera_obs=True,
         use_object_obs=True,
         reward_scale=1.0,
@@ -164,11 +166,14 @@ class Stack(SingleArmEnv):
         camera_segmentations=None,  # {None, instance, class, element}
         renderer="mujoco",
         renderer_config=None,
+        use_touch_obs=False,
+        use_tactile_obs=False,
     ):
         # settings for table top
         self.table_full_size = table_full_size
         self.table_friction = table_friction
-        self.table_offset = np.array((0, 0, 0.8))
+        self.table_offset = np.array(table_offset)
+        # self.table_offset = np.array((0, 0, 0.8))
 
         # reward configuration
         self.reward_scale = reward_scale
@@ -179,6 +184,18 @@ class Stack(SingleArmEnv):
 
         # object placement initializer
         self.placement_initializer = placement_initializer
+
+        # whether to include touch sensor pressure in observations
+        self.use_touch_obs = use_touch_obs
+        self.use_tactile_obs = use_tactile_obs
+
+        if self.use_touch_obs:
+            assert gripper_types in ['PandaTouchGripper', 'Robotiq85TouchGripper'], (
+                "Must specify gripper_types in ['PandaTouchGripper', 'Robotiq85TouchGripper']")
+
+        elif self.use_tactile_obs:
+            assert robots == "Panda", "Tactile sensor is only implemented on Panda gripper"
+            gripper_types = "PandaTactileGripper" 
 
         super().__init__(
             robots=robots,
@@ -359,9 +376,10 @@ class Stack(SingleArmEnv):
             self.placement_initializer = UniformRandomSampler(
                 name="ObjectSampler",
                 mujoco_objects=cubes,
-                x_range=[-0.08, 0.08],
-                y_range=[-0.08, 0.08],
-                rotation=None,
+                x_range=[-0.10, 0.10],
+                y_range=[-0.15, 0.15],
+                # rotation=None,
+                rotation=0,
                 ensure_object_boundary_in_range=False,
                 ensure_valid_placement=True,
                 reference_pos=self.table_offset,
@@ -387,6 +405,15 @@ class Stack(SingleArmEnv):
         self.cubeA_body_id = self.sim.model.body_name2id(self.cubeA.root_body)
         self.cubeB_body_id = self.sim.model.body_name2id(self.cubeB.root_body)
 
+        if self.robots[0].gripper.name.startswith("Robotiq85"):
+            self.fingerpad_id1 = self.sim.model.geom_name2id('gripper0_left_fingerpad_collision')
+            self.fingerpad_id2 = self.sim.model.geom_name2id('gripper0_right_fingerpad_collision')
+            self.fingerpad_offset = 0.02
+        elif self.robots[0].gripper.name.startswith("Panda"):
+            self.fingerpad_id1 = self.sim.model.geom_name2id('gripper0_finger1_pad_collision')
+            self.fingerpad_id2 = self.sim.model.geom_name2id('gripper0_finger2_pad_collision')
+            self.fingerpad_offset = 0.007
+
     def _reset_internal(self):
         """
         Resets simulation internal configurations.
@@ -411,6 +438,61 @@ class Stack(SingleArmEnv):
             OrderedDict: Dictionary mapping observable names to its corresponding Observable object
         """
         observables = super()._setup_observables()
+
+        pf = self.robots[0].robot_model.naming_prefix
+
+        sensors = []
+        names = []
+        enableds = []
+        actives = []
+
+        # Add touch sensor observation
+        if self.use_touch_obs:
+
+            @sensor(modality=f"{pf}touch")
+            def gripper_touch(obs_cache):
+                touch_pressure = np.array([
+                    self.robots[0].get_sensor_measurement('gripper0_touch1').item(),
+                    self.robots[0].get_sensor_measurement('gripper0_touch2').item(),
+                ])
+                touch_pressure /= 10 
+                touch_pressure[touch_pressure >= 1] = 1
+                return touch_pressure
+
+            sensors.append(gripper_touch)
+            names.append(f"{pf}touch")
+            enableds.append(True)
+            actives.append(True)
+
+        elif self.use_tactile_obs:
+
+            @sensor(modality=f"{pf}tactile_depth")
+            def gripper_tactile_depth(obs_cache):
+                left_img, left_depth = self.sim.render(width=84, height=84, camera_name="gripper0_tactile_camera_left", depth=True)
+                right_img, right_depth = self.sim.render(width=84, height=84, camera_name="gripper0_tactile_camera_right", depth=True)
+                tactile_depth = np.stack([left_depth, right_depth], axis=-1)
+
+                return tactile_depth
+
+            sensors.append(gripper_tactile_depth)
+            names.append(f"{pf}tactile_depth")
+            enableds.append(True)
+            actives.append(True)
+
+        # Add gripper width observation
+        gripper_name = self.robots[0].gripper.name
+        if gripper_name.startswith("Panda") or gripper_name.startswith("Robotiq85"):
+
+            @sensor(modality=f"{pf}gripper_width")
+            def gripper_width(obs_cache):
+                width = np.linalg.norm(self.sim.data.geom_xpos[self.fingerpad_id1] 
+                    - self.sim.data.geom_xpos[self.fingerpad_id2]) - self.fingerpad_offset
+                return width
+
+            sensors.append(gripper_width)
+            names.append(f"{pf}gripper_width")
+            enableds.append(True)
+            actives.append(True)
 
         # low-level object information
         if self.use_object_obs:
@@ -459,8 +541,30 @@ class Stack(SingleArmEnv):
                     else np.zeros(3)
                 )
 
-            sensors = [cubeA_pos, cubeA_quat, cubeB_pos, cubeB_quat, gripper_to_cubeA, gripper_to_cubeB, cubeA_to_cubeB]
-            names = [s.__name__ for s in sensors]
+            obj_name = 'cubeA'
+            @sensor(modality=modality)
+            def eef_to_cubeA_yaw(obs_cache):
+                """Computes the minimum yaw rotation to align with object"""
+                if f"{pf}eef_quat" not in obs_cache or f"{obj_name}_quat" not in obs_cache:
+                    return np.array([0.,])
+
+                eef_quat = obs_cache[f'{pf}eef_quat']
+                obj_quat = obs_cache[f'{obj_name}_quat']
+                eef_az = R.from_quat(eef_quat).as_euler('zyx')[0]
+                obj_az = R.from_quat(obj_quat).as_euler('zyx')[0]
+
+                # Flip gripper yaw since it is pointing down
+                eef_az = self.normalize_angle(2 * np.pi - eef_az)
+
+                possible_az = self.normalize_angle(obj_az + np.pi * np.array([0, 0.5, 1, 1.5]))
+                diff_az = self.normalize_angle(np.array([az - eef_az for az in possible_az]))
+                i = np.argmin(np.abs(diff_az))
+                return np.array([possible_az[i] - eef_az,])
+
+            obj_sensors = [cubeA_pos, cubeA_quat, cubeB_pos, cubeB_quat, gripper_to_cubeA, 
+                gripper_to_cubeB, cubeA_to_cubeB, eef_to_cubeA_yaw]
+            sensors += obj_sensors
+            names += [s.__name__ for s in obj_sensors]
 
             # Create observables
             for name, s in zip(names, sensors):

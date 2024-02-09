@@ -179,7 +179,6 @@ class Lift(SingleArmEnv):
         self.table_full_size = table_full_size
         self.table_friction = table_friction
         self.table_offset = np.array(table_offset)
-        # self.table_offset = np.array((0, 0, 0.908))     # For xArm6
 
         # reward configuration
         self.reward_scale = reward_scale
@@ -196,8 +195,8 @@ class Lift(SingleArmEnv):
         self.use_tactile_obs = use_tactile_obs
 
         if self.use_touch_obs:
-            assert gripper_types in ['PandaTouchGripper', 'Robotiq85TouchGripper'], (
-                "Must specify gripper_types in ['PandaTouchGripper', 'Robotiq85TouchGripper']")
+            assert gripper_types in ['PandaTouchGripper', 'Robotiq85TouchGripper', 'RethinkTouchGripper'], (
+                "Must specify gripper_types in ['PandaTouchGripper', 'Robotiq85TouchGripper', 'RethinkTouchGripper']")
 
         elif self.use_tactile_obs:
             assert robots == "Panda", "Tactile sensor is only implemented on Panda gripper"
@@ -337,8 +336,8 @@ class Lift(SingleArmEnv):
         )
 
         if self.init_cube_pos is None:
-            x_range = [-0.03, 0.03]
-            y_range = [-0.03, 0.03]     
+            x_range = [-0.05, 0.05]
+            y_range = [-0.05, 0.05]     
         else:
             x_range = [self.init_cube_pos[0], self.init_cube_pos[0]]
             y_range = [self.init_cube_pos[1], self.init_cube_pos[1]]   
@@ -396,6 +395,10 @@ class Lift(SingleArmEnv):
             self.fingerpad_id1 = self.sim.model.geom_name2id('gripper0_finger1_pad_collision')
             self.fingerpad_id2 = self.sim.model.geom_name2id('gripper0_finger2_pad_collision')
             self.fingerpad_offset = 0.007
+        elif self.robots[0].gripper.name.startswith("Rethink"):
+            self.fingerpad_id1 = self.sim.model.geom_name2id('gripper0_l_fingerpad_g0')
+            self.fingerpad_id2 = self.sim.model.geom_name2id('gripper0_r_fingerpad_g0')
+            self.fingerpad_offset = 0.02
 
     def _setup_observables(self):
         """
@@ -449,7 +452,7 @@ class Lift(SingleArmEnv):
 
         # Add gripper width observation
         gripper_name = self.robots[0].gripper.name
-        if gripper_name.startswith("Panda") or gripper_name.startswith("Robotiq85"):
+        if gripper_name.startswith("Panda") or gripper_name.startswith("Robotiq85") or gripper_name.startswith("Rethink"):
 
             @sensor(modality=f"{pf}gripper_width")
             def gripper_width(obs_cache):

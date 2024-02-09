@@ -117,38 +117,6 @@ class PandaTouchGripper(PandaGripperBase):
         """
         return {sensor: sensor for sensor in ["force_ee", "torque_ee", "touch1", "touch2"]}
 
-class PandaGripper(PandaGripperBase):
-    """
-    Modifies PandaGripperBase to only take one action.
-    """
-    def __init__(self, idn=0):
-        super().__init__(xml_path_completion("grippers/panda_gripper.xml"), idn=idn)
-
-    def format_action(self, action):
-        """
-        Maps continuous action into binary output
-        -1 => open, 1 => closed
-
-        Args:
-            action (np.array): gripper-specific action
-
-        Raises:
-            AssertionError: [Invalid action dimension size]
-        """
-        assert len(action) == self.dof
-        self.current_action = np.clip(
-            self.current_action + np.array([-1.0, 1.0]) * self.speed * np.sign(action), -1.0, 1.0
-        )
-        return self.current_action
-
-    @property
-    def speed(self):
-        return 0.01
-
-    @property
-    def dof(self):
-        return 1
-
 
 class PandaTactileGripper(PandaGripperBase):
     """
