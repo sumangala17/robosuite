@@ -11,7 +11,6 @@ from robosuite.utils.mjcf_utils import (
     find_elements,
     new_body,
     new_geom,
-    new_inertial,
     new_joint,
     new_site,
 )
@@ -55,6 +54,13 @@ class CompositeBodyObject(MujocoGeneratedObject):
             top-level object site will be used. Otherwise, should be a list of dictionaries, where each dictionary
             should specify the appropriate attributes for the given site.
             See http://www.mujoco.org/book/XMLreference.html#site for reference.
+
+        total_size (None or np.array): if provided, use this to describe the bounding box for this composite body
+            object. Can also be used to specify @object_locations relative to the lower left corner of the bounding
+            box defined by @total_size, instead of the center of this body, with @locations_relative_to_corner.
+
+        locations_relative_to_corner (bool): if True, must supply @total_size. All object locations will be
+            relative to the lower left corner of the bounding box.
     """
 
     def __init__(
@@ -67,6 +73,8 @@ class CompositeBodyObject(MujocoGeneratedObject):
         joints="default",
         body_joints=None,
         sites=None,
+        total_size=None,
+        locations_relative_to_corner=False,
     ):
         # Always call superclass first
         super().__init__()
@@ -102,6 +110,8 @@ class CompositeBodyObject(MujocoGeneratedObject):
             self.joint_specs = joints
 
         # Set body joints
+        if body_joints is None:
+            body_joints = {}
         self.body_joint_specs = body_joints
 
         # Make sure all joints are named appropriately
@@ -126,6 +136,11 @@ class CompositeBodyObject(MujocoGeneratedObject):
                 site_spec["name"] = "site{}".format(s_num)
                 s_num += 1
 
+        self.total_size = np.array(total_size) if total_size is not None else None
+        self.locations_relative_to_corner = locations_relative_to_corner
+        if self.locations_relative_to_corner:
+            assert self.total_size is not None
+
         # Always run sanity check
         self.sanity_check()
 
@@ -138,9 +153,6 @@ class CompositeBodyObject(MujocoGeneratedObject):
     def _get_object_subtree(self):
         # Initialize top-level body
         obj = new_body(name="root")
-
-        # Give main body a small mass in order to have a free joint (only needed for mujoco 1.5)
-        obj.append(new_inertial(pos=(0, 0, 0), mass=0.0001, diaginertia=(0.0001, 0.0001, 0.0001)))
 
         # Add all joints and sites
         for joint_spec in self.joint_specs:
@@ -196,6 +208,17 @@ class CompositeBodyObject(MujocoGeneratedObject):
         # Get the object xml element tree, remove its top-level joints, and modify its top-level pos / quat
         child = obj.get_obj()
         self._remove_joints(child)
+
+        if self.locations_relative_to_corner:
+            # use object location to convert to position coordinate (the origin is the
+            # center of the composite object)
+            cartesian_size = obj.get_bounding_box_half_size()
+            pos = [
+                (-self.total_size[0] + cartesian_size[0]) + pos[0],
+                (-self.total_size[1] + cartesian_size[1]) + pos[1],
+                (-self.total_size[2] + cartesian_size[2]) + pos[2],
+            ]
+
         child.set("pos", array_to_string(pos))
         child.set("quat", array_to_string(quat))
         # Add this object and its assets to this composite object
@@ -260,6 +283,11 @@ class CompositeBodyObject(MujocoGeneratedObject):
     @property
     def horizontal_radius(self):
         return self._horizontal
+
+    def get_bounding_box_half_size(self):
+        if self.total_size is not None:
+            return np.array(self.total_size)
+        return super().get_bounding_box_half_size()
 
 
 class CompositeObject(MujocoGeneratedObject):
@@ -337,6 +365,7 @@ class CompositeObject(MujocoGeneratedObject):
         geom_rgbas=None,
         geom_materials=None,
         geom_frictions=None,
+        geom_condims=None,
         rgba=None,
         density=100.0,
         solref=(0.02, 1.0),
@@ -392,6 +421,7 @@ class CompositeObject(MujocoGeneratedObject):
         self.geom_rgbas = list(geom_rgbas) if geom_rgbas is not None else [None] * n_geoms
         self.geom_materials = list(geom_materials) if geom_materials is not None else [None] * n_geoms
         self.geom_frictions = list(geom_frictions) if geom_frictions is not None else [None] * n_geoms
+        self.geom_condims = list(geom_condims) if geom_condims is not None else [None] * n_geoms
         self.density = [density] * n_geoms if density is None or type(density) in {float, int} else list(density)
         self.solref = [solref] * n_geoms if solref is None or type(solref[0]) in {float, int} else list(solref)
         self.solimp = [solimp] * n_geoms if obj_types is None or type(solimp[0]) in {float, int} else list(solimp)
@@ -408,7 +438,7 @@ class CompositeObject(MujocoGeneratedObject):
         # Extract the appropriate private attributes for this
         self._get_object_properties()
 
-    def get_bounding_box_size(self):
+    def get_bounding_box_half_size(self):
         return np.array(self.total_size)
 
     def in_box(self, position, object_position):
@@ -448,6 +478,7 @@ class CompositeObject(MujocoGeneratedObject):
             g_name,
             g_rgba,
             g_friction,
+            g_condim,
             g_quat,
             g_material,
             g_density,
@@ -462,6 +493,7 @@ class CompositeObject(MujocoGeneratedObject):
                 self.geom_names,
                 self.geom_rgbas,
                 self.geom_frictions,
+                self.geom_condims,
                 self.geom_quats,
                 self.geom_materials,
                 self.density,
@@ -521,6 +553,8 @@ class CompositeObject(MujocoGeneratedObject):
                 col_geom_attr["solref"] = array_to_string(g_solref)
                 col_geom_attr["solimp"] = array_to_string(g_solimp)
                 col_geom_attr["rgba"] = OBJECT_COLLISION_COLOR
+                if g_condim is not None:
+                    col_geom_attr["condim"] = str(g_condim)
                 obj.append(new_geom(**col_geom_attr))
 
             # Add visual geom if necessary
