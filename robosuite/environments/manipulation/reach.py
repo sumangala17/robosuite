@@ -151,7 +151,7 @@ class Reach(SingleArmEnv):
         use_camera_obs=True,
         use_object_obs=True,
         reward_scale=1.0,
-        reward_shaping=False,
+        reward_shaping=True,
         placement_initializer=None,
         has_renderer=False,
         has_offscreen_renderer=True,
@@ -279,7 +279,7 @@ class Reach(SingleArmEnv):
 
         self.target = BallObject(
             name="target",
-            size=[0.01],
+            size=[0.03],
             rgba=[0, 1, 0, 1],
             obj_type='visual',
             joints=None
