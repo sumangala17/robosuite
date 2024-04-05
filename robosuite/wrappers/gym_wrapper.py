@@ -58,12 +58,13 @@ class GymWrapper(Wrapper, gym.Env):
         obs = self.env.reset()
         self.modality_dims = {key: obs[key].shape for key in self.keys}
         flat_ob = self._flatten_obs(obs)
-        if 'robot0_joint_pos' in obs:
-            self.curr_joint_angles = obs['robot0_joint_pos'].copy()
         try:
             self.obs_dim = flat_ob.size
         except AttributeError:
-            self.obs_dim = sum(ob.size for ob in flat_ob)
+            if isinstance(flat_ob, tuple):
+                self.obs_dim = sum(ob.size for ob in flat_ob)
+            elif isinstance(flat_ob, dict):
+                self.obs_dim = sum(ob.size for ob in flat_ob.values())
         high = np.inf * np.ones(self.obs_dim)
         low = -high
         self.observation_space = spaces.Box(low, high)

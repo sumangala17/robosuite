@@ -429,8 +429,8 @@ class MujocoEnv(metaclass=EnvMeta):
         """
         reward = self.reward(action)
 
-        # done if number of elapsed timesteps is greater than horizon
-        self.done = (self.timestep >= self.horizon) and not self.ignore_done
+        # done if number of elapsed timesteps is greater than horizon or if task is succesfully completed
+        self.done = ((self.timestep >= self.horizon) or self._check_success()) and not self.ignore_done
 
         return reward, self.done, {}
 

@@ -235,9 +235,11 @@ class Reach(SingleArmEnv):
             float: reward value
         """
 
+        reward = 0
         # sparse completion reward
         if self._check_success():
-            reward = 1
+            reward = self.reward_scale
+            # reward = 1
 
         # use a shaping reward
         elif self.reward_shaping:
@@ -246,8 +248,9 @@ class Reach(SingleArmEnv):
             gripper_site_pos = self.sim.data.site_xpos[self.robots[0].eef_site_id]
             target_pos = self.sim.data.body_xpos[self.target_body_id]
             dist = np.linalg.norm(gripper_site_pos - target_pos)
-            reaching_reward = 1 - np.tanh(10.0 * dist)
-            reward = reaching_reward
+            # reaching_reward = 1 - np.tanh(10.0 * dist)
+            reaching_reward = -((2 * dist) ** 2)
+            reward += reaching_reward
 
         return reward
 
@@ -422,7 +425,7 @@ class Reach(SingleArmEnv):
         gripper_site_pos = self.sim.data.site_xpos[self.robots[0].eef_site_id]
         target_pos = self.sim.data.body_xpos[self.target_body_id]
 
-        # cube is higher than the table top above a margin
+        # gripper is within a small distance to the target
         return np.linalg.norm(gripper_site_pos - target_pos) < 0.03
 
     def reset_target(self):
