@@ -56,6 +56,11 @@ class GymWrapper(Wrapper, gym.Env):
 
         # set up observation and action spaces
         obs = self.env.reset()
+        for o in self.keys:
+            print(o, obs[o].shape)
+            if o == 'sideview_image':
+                obs[o] = obs[o][0,0]
+                print('new image shape', obs[o].shape)
         self.modality_dims = {key: obs[key].shape for key in self.keys}
         flat_ob = self._flatten_obs(obs)
         try:
@@ -65,6 +70,7 @@ class GymWrapper(Wrapper, gym.Env):
                 self.obs_dim = sum(ob.size for ob in flat_ob)
             elif isinstance(flat_ob, dict):
                 self.obs_dim = sum(ob.size for ob in flat_ob.values())
+        # self.obs_dim += 32
         high = np.inf * np.ones(self.obs_dim)
         low = -high
         self.observation_space = spaces.Box(low, high)
