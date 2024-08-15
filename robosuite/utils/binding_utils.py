@@ -23,8 +23,8 @@ import subprocess
 import robosuite.macros as macros
 
 _SYSTEM = platform.system()
-if _SYSTEM == "Windows":
-    ctypes.WinDLL(os.path.join(os.path.dirname(__file__), "mujoco.dll"))
+# if _SYSTEM == "Windows":
+#     ctypes.WinDLL(os.path.join(os.path.dirname(__file__), "mujoco.dll"))
 
 CUDA_VISIBLE_DEVICES = os.environ.get("CUDA_VISIBLE_DEVICES", "")
 if CUDA_VISIBLE_DEVICES != "":
@@ -41,7 +41,9 @@ if macros.MUJOCO_GPU_RENDERING and os.environ.get("MUJOCO_GL", None) not in ["os
         os.environ["MUJOCO_GL"] = "cgl"
     else:
         os.environ["MUJOCO_GL"] = "egl"
+os.environ["MUJOCO_GL"] = "wgl"
 _MUJOCO_GL = os.environ.get("MUJOCO_GL", "").lower().strip()
+print("we got", _MUJOCO_GL)
 if _MUJOCO_GL not in ("disable", "disabled", "off", "false", "0"):
     _VALID_MUJOCO_GL = ("enable", "enabled", "on", "true", "1", "glfw", "")
     if _SYSTEM == "Linux":

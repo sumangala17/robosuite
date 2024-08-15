@@ -14,6 +14,7 @@ from robosuite.wrappers import Wrapper
 class GymWrapper(Wrapper, gym.Env):
     metadata = None
     render_mode = None
+
     """
     Initializes the Gym wrapper. Mimics many of the required functionalities of the Wrapper class
     found in the gym.core module
@@ -56,13 +57,13 @@ class GymWrapper(Wrapper, gym.Env):
 
         # set up observation and action spaces
         obs = self.env.reset()
-        for o in self.keys:
-            print(o, obs[o].shape)
-            if o == 'sideview_image':
-                obs[o] = obs[o][0,0]
-                print('new image shape', obs[o].shape)
+        if 'frontview_image' in self.keys:
+            obs['frontview_image'] = np.random.randn(32) # enter desired shape, processed image not needed
+
         self.modality_dims = {key: obs[key].shape for key in self.keys}
-        flat_ob = self._flatten_obs(obs)
+        # print(self.modality_dims)
+
+        flat_ob = self._flatten_obs(obs)[0]
         try:
             self.obs_dim = flat_ob.size
         except AttributeError:
@@ -76,6 +77,7 @@ class GymWrapper(Wrapper, gym.Env):
         self.observation_space = spaces.Box(low, high)
         low, high = self.env.action_spec
         self.action_space = spaces.Box(low, high)
+        # exit(0)
 
     def _flatten_obs(self, obs_dict, verbose=False):
         """
@@ -89,12 +91,19 @@ class GymWrapper(Wrapper, gym.Env):
             np.array: observations flattened into a 1d array
         """
         ob_lst = []
+        obs_len = 0
+        img_index = -1
+        img_end_index = -1
         for key in self.keys:
             if key in obs_dict:
                 if verbose:
-                    print("adding key: {}".format(key))
+                    print("adding key: {}".format(key), obs_dict[key].shape)
+                if 'view' in key:  # check if obs key is a camera view, save the index
+                    img_index = obs_len
+                    img_end_index = img_index + len(np.array(obs_dict[key]).flatten())
                 ob_lst.append(np.array(obs_dict[key]).flatten())
-        return np.concatenate(ob_lst)
+                obs_len += len(ob_lst[-1])
+        return np.concatenate(ob_lst), {'img_index': img_index, 'img_end_index': img_end_index}
 
     def reset(self, seed=None, options=None):
         """
@@ -109,7 +118,13 @@ class GymWrapper(Wrapper, gym.Env):
             else:
                 raise TypeError("Seed must be an integer type!")
         ob_dict = self.env.reset()
-        return self._flatten_obs(ob_dict), {}
+        # if 'frontview_image' in ob_dict:
+        #     embedding_net = options['embedding_net']
+        #     # ob_dict['frontview_image'] = np.random.randn(32)  # get embedding
+        #     inputs = embedding_net(ob_dict['frontview_image'])
+        #     ob_dict['frontview_image'] = inputs
+        res, img_dict = self._flatten_obs(ob_dict)
+        return res, img_dict
 
     def step(self, action):
         """
@@ -128,7 +143,10 @@ class GymWrapper(Wrapper, gym.Env):
                 - (dict) misc information
         """
         ob_dict, reward, terminated, info = self.env.step(action)
-        return self._flatten_obs(ob_dict), reward, terminated, False, info
+        # if 'frontview_image' in ob_dict:
+        #     print("WE ARE STEPPING CHANGE THE IMG PROCESSING HERE!")
+            # ob_dict['frontview_image'] = np.random.randn(32)
+        return self._flatten_obs(ob_dict)[0], reward, terminated, False, info
 
     def compute_reward(self, achieved_goal, desired_goal, info):
         """
